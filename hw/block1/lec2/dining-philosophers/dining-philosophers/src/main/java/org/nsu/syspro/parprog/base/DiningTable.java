@@ -7,7 +7,7 @@ import java.util.ArrayList;
 
 public abstract class DiningTable<P extends Philosopher, F extends Fork> {
     private final ArrayList<F> forks;
-    private final ArrayList<P> phils;
+    public final ArrayList<P> phils;
     private final ArrayList<Thread> threads;
 
     private boolean started;
@@ -96,6 +96,10 @@ public abstract class DiningTable<P extends Philosopher, F extends Fork> {
         return phils.stream()
                 .mapToLong(Philosopher::meals)
                 .sum();
+    }
+
+    public long[] meals() {
+        return phils.stream().mapToLong(Philosopher::meals).toArray();
     }
 
     public abstract F createFork();

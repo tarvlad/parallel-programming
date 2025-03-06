@@ -1,5 +1,6 @@
 package org.nsu.syspro.parprog.base;
 
+import org.nsu.syspro.parprog.control.Scheduler;
 import org.nsu.syspro.parprog.interfaces.Fork;
 
 import java.util.concurrent.atomic.AtomicLong;
@@ -15,6 +16,7 @@ public class DefaultFork implements Fork {
     public DefaultFork() {
         this.id = idProvider.getAndAdd(1);
         this.owner = null;
+        Scheduler.register(this);
     }
 
     @Override

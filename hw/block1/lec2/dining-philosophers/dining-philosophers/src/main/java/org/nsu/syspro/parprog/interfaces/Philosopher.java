@@ -1,5 +1,7 @@
 package org.nsu.syspro.parprog.interfaces;
 
+import java.util.concurrent.locks.Lock;
+
 public interface Philosopher {
     long meals();
     void countMeal();
@@ -19,4 +21,6 @@ public interface Philosopher {
     }
 
     void onHungry(Fork left, Fork right);
+
+    Lock getLock();
 }

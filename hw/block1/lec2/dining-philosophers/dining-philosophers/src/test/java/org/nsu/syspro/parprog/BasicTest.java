@@ -1,13 +1,17 @@
 package org.nsu.syspro.parprog;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.nsu.syspro.parprog.base.DefaultFork;
 import org.nsu.syspro.parprog.base.DiningTable;
+import org.nsu.syspro.parprog.control.Scheduler;
 import org.nsu.syspro.parprog.examples.DefaultPhilosopher;
 import org.nsu.syspro.parprog.helpers.TestLevels;
+
+import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -27,6 +31,11 @@ class BasicTest extends TestLevels {
         public DefaultPhilosopher createPhilosopher() {
             return new DefaultPhilosopher();
         }
+    }
+
+    @AfterEach
+    public void reset() {
+        Scheduler.reset();
     }
 
     @EnabledIf("easyEnabled")
@@ -65,6 +74,8 @@ class BasicTest extends TestLevels {
         final BasicTable table = dine(new BasicTable(N), 1);
         final long minMeals = table.minMeals();
         final long maxMeals = table.maxMeals();
+        System.out.println("--> " + Arrays.toString(table.meals()));
+        System.out.println("--> " + N + " {" + minMeals + ", " + maxMeals + "}");
         assertTrue(maxMeals < 1.5 * minMeals); // some king of gini index for philosophers
     }
 }
