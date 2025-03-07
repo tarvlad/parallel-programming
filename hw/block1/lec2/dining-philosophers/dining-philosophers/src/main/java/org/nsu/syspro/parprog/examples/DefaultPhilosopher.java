@@ -32,9 +32,8 @@ public class DefaultPhilosopher implements Philosopher {
     }
 
     public void onHungry(Fork left, Fork right) {
+        lock.lock();
         try {
-            lock.lock();
-
             var first = Scheduler.preEnterLock(left);
             var second = Scheduler.preEnterLock(right);
             if (first.tryLock()) {

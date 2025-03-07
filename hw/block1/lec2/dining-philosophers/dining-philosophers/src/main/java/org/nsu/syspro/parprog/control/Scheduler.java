@@ -14,7 +14,7 @@ public class Scheduler {
     private static ArrayList<Philosopher> queue = new ArrayList<>();
     private static ArrayList<Long> ate = new ArrayList<>();
     private static HashMap<Fork, Lock> preEnterLocks = new HashMap<>();
-    private static final Lock preEnterLocksConsistency = new ReentrantLock();
+    private static final Lock preEnterLocksConsistency = new ReentrantLock(true);
 
     static {
         new Thread(Scheduler::schedule).start();
@@ -36,7 +36,7 @@ public class Scheduler {
             service.lock();
             try {
                 preEnterLocksConsistency.lock();
-                preEnterLocks.put(f, new ReentrantLock());
+                preEnterLocks.put(f, new ReentrantLock(true));
             } finally {
                 preEnterLocksConsistency.unlock();
             }
@@ -77,17 +77,33 @@ public class Scheduler {
 
     private static int maxAteIdx() {
         assert ate.size() == queue.size();
-        long value = 0;
+        long value = Long.MAX_VALUE;
         int idx = 0;
         for (int i = 0; i < ate.size(); i++) {
             var iAte = ate.get(i);
-            if (iAte > value) {
+            if (iAte < value) {
                 idx = i;
                 value = iAte;
             }
         }
 
         return idx;
+    }
+
+    private static int incZn(int x, int N) {
+        assert x < N && x >= 0;
+        if (x == N - 1) {
+            return 0;
+        }
+        return x + 1;
+    }
+
+    private static int decZn(int x, int N) {
+        assert x < N && x >= 0;
+        if (x == 0) {
+            return N - 1;
+        }
+        return x - 1;
     }
 
     private static void scheduleCycle() {
@@ -97,16 +113,24 @@ public class Scheduler {
         }
 
         int pausedIdx = maxAteIdx();
-        var paused = queue.get(pausedIdx);
-        var pausedLock = paused.getLock();
+        int N = queue.size();
+        var pausedLeft = queue.get(decZn(pausedIdx, N));
+        var pausedRight = N < 4 ? pausedLeft : queue.get(incZn(pausedIdx, N));
+        var pausedLeftLock = pausedLeft.getLock();
+        var pausedRightLock = pausedRight.getLock();
+        pausedLeftLock.lock();
         try {
-            pausedLock.lock();
-            Thread.sleep(0, 100000);
-            Thread.yield();
-        } catch (InterruptedException ignored) {
-            Thread.yield();
+            pausedRightLock.lock();
+            try {
+                Thread.sleep(0, 100000);
+                Thread.yield();
+            } catch (InterruptedException ignored) {
+                Thread.yield();
+            } finally {
+                pausedRightLock.unlock();
+            }
         } finally {
-            pausedLock.unlock();
+            pausedLeftLock.unlock();
         }
     }
 
