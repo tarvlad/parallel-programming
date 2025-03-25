@@ -12,7 +12,6 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.stream.Collectors;
 
 public class SolutionThread extends UserThread {
 
@@ -21,6 +20,7 @@ public class SolutionThread extends UserThread {
         private final MethodID base;
 
         public CachedMethodID(MethodID base) {
+            assert !(base instanceof CachedMethodID);
             this.base = base;
         }
 
@@ -48,6 +48,55 @@ public class SolutionThread extends UserThread {
         }
     }
 
+    private static class MethodCacheLookupResult {
+
+        public enum Kind {
+            EMPTY,
+            L1,
+            L2
+        }
+
+        private final CompiledMethod method;
+        private final Kind kind;
+
+        public static MethodCacheLookupResult forEmpty() {
+            return new MethodCacheLookupResult(null, Kind.EMPTY);
+        }
+
+        public static MethodCacheLookupResult forL1Entry(CompiledMethod method) {
+            return new MethodCacheLookupResult(method, Kind.L1);
+        }
+
+        public static MethodCacheLookupResult forL2Entry(CompiledMethod method) {
+            return new MethodCacheLookupResult(method, Kind.L2);
+        }
+
+        private MethodCacheLookupResult(CompiledMethod method, Kind kind) {
+            this.method = method;
+            this.kind = kind;
+        }
+
+        public CompiledMethod result() {
+            return method;
+        }
+
+        public Kind kind() {
+            return kind;
+        }
+
+        public boolean isEmpty() {
+            return kind == Kind.EMPTY;
+        }
+
+        public boolean isL1() {
+            return kind == Kind.L1;
+        }
+
+        public boolean isL2() {
+            return kind == Kind.L2;
+        }
+    }
+
     private static final Map<CachedMethodID, Long> hotnessGlobal = new HashMap<>();
     private static final ReadWriteLock hotnessGlobalLock = new ReentrantReadWriteLock(true);
     private static final Map<CachedMethodID, Future<CompiledMethod>> compiledL1Global = new HashMap<>();
@@ -60,74 +109,69 @@ public class SolutionThread extends UserThread {
     private final Map<CachedMethodID, CompiledMethod> compiledL1 = new HashMap<>();
     private final Map<CachedMethodID, CompiledMethod> compiledL2 = new HashMap<>();
 
-    private static <K, V> Map<K, V> mapCopyWithLock(Map<K, V> base, ReadWriteLock readWriteLock) {
-        readWriteLock.readLock().lock();
-        try {
-            return base.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-        } finally {
-            readWriteLock.readLock().unlock();
-        }
-    }
-
     public SolutionThread(int compilationThreadBound, ExecutionEngine exec, CompilationEngine compiler, Runnable r) {
         super(compilationThreadBound, exec, compiler, r);
 
         if (jitEngineInitialized.tryLock() && jitEngine == null) {
             jitEngine = Executors.newFixedThreadPool(compilationThreadBound);
-            jitEngine.execute(() -> {
-                while (true) {
-                    var hotnessCopy = mapCopyWithLock(hotnessGlobal, hotnessGlobalLock);
-                    var compiledL1Copy = mapCopyWithLock(compiledL1Global, compiledL1GlobalLock);
-                    var compiledL2Copy = mapCopyWithLock(compiledL2Global, compiledL2GlobalLock);
-
-                    var newCompiledL1Keys = new ArrayList<CachedMethodID>();
-                    var newCompiledL1Values = new ArrayList<Future<CompiledMethod>>();
-                    var newCompiledL2Keys = new ArrayList<CachedMethodID>();
-                    var newCompiledL2Values = new ArrayList<Future<CompiledMethod>>();
-                    for (var entry : hotnessCopy.entrySet()) {
-                        var id = entry.getKey();
-                        var hotness = entry.getValue();
-
-                        if (hotness > 10000 && compiledL2Copy.getOrDefault(id, null) == null) {
-                            var compiled = jitEngine.submit(() -> compiler.compile_l2(id.base()));
-                            newCompiledL2Keys.add(id);
-                            newCompiledL2Values.add(compiled);
-                        } else if (hotness > 1000 && compiledL1Copy.getOrDefault(id, null) == null) {
-                            var compiled = jitEngine.submit(() -> compiler.compile_l1(id.base()));
-                            newCompiledL1Keys.add(id);
-                            newCompiledL1Values.add(compiled);
-                        }
-                    }
-
-                    compiledL1GlobalLock.writeLock().lock();
-                    try {
-                        for (int i = 0; i < newCompiledL1Keys.size(); i++) {
-                            compiledL1Global.put(newCompiledL1Keys.get(i), newCompiledL1Values.get(i));
-                        }
-                    } finally {
-                        compiledL1GlobalLock.writeLock().unlock();
-                    }
-
-                    compiledL2GlobalLock.writeLock().lock();
-                    try {
-                        for (int i = 0; i < newCompiledL2Keys.size(); i++) {
-                            compiledL2Global.put(newCompiledL2Keys.get(i), newCompiledL2Values.get(i));
-                        }
-                    } finally {
-                        compiledL2GlobalLock.writeLock().unlock();
-                    }
-                }
-            });
         }
     }
 
-    private CompiledMethod lookup(MethodID methodID) {
+    private MethodCacheLookupResult lookupLocal(MethodID methodID) {
         var cachedMethodId = new CachedMethodID(methodID);
         var lookupL2 = compiledL2.getOrDefault(cachedMethodId, null);
         if (lookupL2 == null) {
-            return compiledL1.getOrDefault(cachedMethodId, null);
+            var lookupL1 = compiledL1.getOrDefault(cachedMethodId, null);
+            if (lookupL1 == null) {
+                return MethodCacheLookupResult.forEmpty();
+            }
+            return MethodCacheLookupResult.forL1Entry(lookupL1);
         }
-        return lookupL2;
+        return MethodCacheLookupResult.forL2Entry(lookupL2);
+    }
+
+    private static CompiledMethod lookup(MethodID methodID, Map<CachedMethodID, Future<CompiledMethod>> cache, ReadWriteLock cacheReadWriteLock) {
+        var cachedMethodId = new CachedMethodID(methodID);
+
+        CompiledMethod lookupResult = null;
+        cacheReadWriteLock.readLock().lock();
+        try {
+            var lookupFuture = cache.getOrDefault(cachedMethodId, null);
+            if (lookupFuture != null && lookupFuture.isDone()) {
+                lookupResult = lookupFuture.get();
+            }
+        } catch (ExecutionException | InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            cacheReadWriteLock.readLock().unlock();
+        }
+
+        return lookupResult;
+    }
+
+    private MethodCacheLookupResult lookupGlobalL1(MethodID methodID) {
+        var lookup = lookup(methodID, compiledL1Global, compiledL1GlobalLock);
+        if (lookup == null) {
+            return MethodCacheLookupResult.forEmpty();
+        }
+        return MethodCacheLookupResult.forL1Entry(lookup);
+    }
+
+    private MethodCacheLookupResult lookupGlobalL2(MethodID methodID) {
+        var lookup = lookup(methodID, compiledL2Global, compiledL2GlobalLock);
+        if (lookup == null) {
+            return MethodCacheLookupResult.forEmpty();
+        }
+        return MethodCacheLookupResult.forL2Entry(lookup);
+    }
+
+    private long receiveHotness(MethodID methodID) {
+        hotnessGlobalLock.readLock().lock();
+        try {
+            return hotnessGlobal.getOrDefault(new CachedMethodID(methodID), 0L);
+        } finally {
+            hotnessGlobalLock.readLock().unlock();
+        }
     }
 
     private void updateHotness(MethodID methodID) {
@@ -141,50 +185,76 @@ public class SolutionThread extends UserThread {
         }
     }
 
-    private void replicateCaches() {
-        var compiledL1Copy = mapCopyWithLock(compiledL1Global, compiledL1GlobalLock);
-        var compiledL2Copy = mapCopyWithLock(compiledL2Global, compiledL2GlobalLock);
-
-        for (var entry : compiledL1Copy.entrySet()) {
-            var cachedMethodID = entry.getKey();
-            var compiledMethodFuture = entry.getValue();
-
-            if (compiledMethodFuture.isDone()) {
-                try {
-                    compiledL1.put(cachedMethodID, compiledMethodFuture.get());
-                } catch (InterruptedException | ExecutionException e) {
-                    throw new RuntimeException(e);
-                }
+    private void scheduleL2Compilation(MethodID methodID) {
+        compiledL2GlobalLock.writeLock().lock();
+        try {
+            if (compiledL2Global.getOrDefault(new CachedMethodID(methodID), null) != null) {
+                return;
             }
+            var compiled = jitEngine.submit(() -> compiler.compile_l2(methodID));
+            compiledL2Global.put(new CachedMethodID(methodID), compiled);
+        } finally {
+            compiledL2GlobalLock.writeLock().unlock();
+        }
+    }
+
+    private void scheduleL1Compilation(MethodID methodID) {
+        compiledL1GlobalLock.writeLock().lock();
+        try {
+            if (compiledL1Global.getOrDefault(new CachedMethodID(methodID), null) != null) {
+                return;
+            }
+            var compiled = jitEngine.submit(() -> compiler.compile_l1(methodID));
+            compiledL1Global.put(new CachedMethodID(methodID), compiled);
+        } finally {
+            compiledL1GlobalLock.writeLock().unlock();
+        }
+    }
+
+    private void syncWithGlobalCache(MethodID methodID, MethodCacheLookupResult localLookupResult) {
+        if (localLookupResult.isL2()) {
+            return;
         }
 
-        for (var entry : compiledL2Copy.entrySet()) {
-            var cachedMethodID = entry.getKey();
-            var compiledMethodFuture = entry.getValue();
+        var lookupL2 = lookupGlobalL2(methodID);
+        if (!lookupL2.isEmpty()) {
+            compiledL2.put(new CachedMethodID(methodID), lookupL2.result());
+            return;
+        }
 
-            if (compiledMethodFuture.isDone()) {
-                try {
-                    compiledL2.put(cachedMethodID, compiledMethodFuture.get());
-                } catch (InterruptedException | ExecutionException e) {
-                    throw new RuntimeException(e);
-                }
-            }
+        var hotness = receiveHotness(methodID);
+        if (hotness > 10_000) {
+            scheduleL2Compilation(methodID);
+        }
+
+        if (localLookupResult.isL1()) {
+            return;
+        }
+
+        var lookupL1 = lookupGlobalL1(methodID);
+        if (!lookupL1.isEmpty()) {
+            compiledL1.put(new CachedMethodID(methodID), lookupL1.result());
+            return;
+        }
+
+        if (hotness > 1_000) {
+            scheduleL1Compilation(methodID);
         }
     }
 
     @Override
     public ExecutionResult executeMethod(MethodID methodID) {
-        var compiled = lookup(methodID);
+        var compiled = lookupLocal(methodID);
 
         ExecutionResult result;
-        if (compiled != null) {
-            result = exec.execute(compiled);
+        if (!compiled.isEmpty()) {
+            result = exec.execute(compiled.result());
         } else {
             result = exec.interpret(methodID);
         }
 
         updateHotness(methodID);
-        replicateCaches();
+        syncWithGlobalCache(methodID, compiled);
         return result;
     }
 }
