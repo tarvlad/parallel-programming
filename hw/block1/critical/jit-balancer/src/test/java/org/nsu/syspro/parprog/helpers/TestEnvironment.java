@@ -3,6 +3,9 @@ package org.nsu.syspro.parprog.helpers;
 import org.nsu.syspro.parprog.UserThread;
 import org.nsu.syspro.parprog.external.*;
 import org.nsu.syspro.parprog.solution.EasyFastTest;
+import org.nsu.syspro.parprog.solution.caching.MethodCache;
+import org.nsu.syspro.parprog.solution.jit.JitEngine;
+import org.nsu.syspro.parprog.solution.profiling.ExecutionCounters;
 
 import java.time.Duration;
 import java.util.*;
@@ -39,12 +42,18 @@ public class TestEnvironment {
     private final TestCompilationEngine compiler;
     private final TestExecutor taskExecutor;
     private final ScheduledExecutorService utilityPool;
+    private final MethodCache methodCache;
+    private final ExecutionCounters execCounters;
+    private final JitEngine jitEngine;
 
     private final long idOnStart = UserThread.firstUnusedThreadNum();
 
     public TestEnvironment(Duration interpret, Duration l1Exec, Duration l2Exec, Duration l1comp, Duration l2comp) {
         engine = new TestExecutionEngine(interpret, l1Exec, l2Exec);
         compiler = new TestCompilationEngine(l1comp, l2comp);
+        methodCache = new MethodCache();
+        execCounters = new ExecutionCounters();
+        jitEngine = new JitEngine(Executors.newFixedThreadPool(TestLevels.compilationThreadBound()), compiler);
         taskExecutor = new TestExecutor();
         utilityPool = Executors.newScheduledThreadPool(Runtime.getRuntime().availableProcessors());
         counters = new AtomicLong[EventType.values().length];
@@ -376,7 +385,7 @@ public class TestEnvironment {
         private final Set<UserThread> running = new HashSet<>();
 
         public UserThread execute(Runnable command) {
-            final UserThread thread = EasyFastTest.createUserThread(engine, compiler, () -> {
+            final UserThread thread = EasyFastTest.createUserThread(methodCache, execCounters, jitEngine, engine, compiler, () -> {
                 command.run();
 
                 synchronized (running) {

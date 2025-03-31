@@ -1,14 +1,17 @@
 package org.nsu.syspro.parprog.helpers;
 
+import com.sun.jdi.Method;
 import org.nsu.syspro.parprog.UserThread;
-import org.nsu.syspro.parprog.examples.AdaptiveCompiler;
-import org.nsu.syspro.parprog.examples.CachingTopTierJIT;
-import org.nsu.syspro.parprog.examples.Interpreter;
 import org.nsu.syspro.parprog.external.CompilationEngine;
 import org.nsu.syspro.parprog.external.ExecutionEngine;
+import org.nsu.syspro.parprog.solution.SessionContext;
 import org.nsu.syspro.parprog.solution.SolutionThread;
+import org.nsu.syspro.parprog.solution.caching.MethodCache;
+import org.nsu.syspro.parprog.solution.jit.JitEngine;
+import org.nsu.syspro.parprog.solution.profiling.ExecutionCounters;
 
 import java.time.Duration;
+import java.util.concurrent.ExecutorService;
 
 public abstract class TestLevels {
 
@@ -19,11 +22,9 @@ public abstract class TestLevels {
         return 3;
     }
 
-    public static UserThread createUserThread(ExecutionEngine e, CompilationEngine c, Runnable r) {
-        // return new Interpreter(e, c, r);
-        // return new AdaptiveCompiler(e, c, r);
-        // return new CachingTopTierJIT(e, c, r);
-        return new SolutionThread(compilationThreadBound(), e, c, r);
+    public static UserThread createUserThread(MethodCache methodCache, ExecutionCounters counters, JitEngine jitEngine, ExecutionEngine e, CompilationEngine c, Runnable r) {
+        SessionContext context = new SessionContext(e, methodCache, counters, jitEngine);
+        return new SolutionThread(context, r);
     }
 
     enum Level {

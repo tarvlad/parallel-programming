@@ -4,7 +4,7 @@ import org.nsu.syspro.parprog.external.MethodID;
 
 import java.util.concurrent.atomic.AtomicLong;
 
-public final class TestMethod implements MethodID {
+public final class TestMethod extends MethodID {
 
     private static final AtomicLong idProvider = new AtomicLong(0);
 
