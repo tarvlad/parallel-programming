@@ -2,16 +2,16 @@ package org.nsu.syspro.parprog.solution.profiling;
 
 import org.nsu.syspro.parprog.external.MethodID;
 
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
- * Storage for execution counters - with same guarantees as {@link ConcurrentHashMap} - provides
+ * Storage for execution counters - provides
  * possibility to get counter associated with given method id performing
- * its thread-safe initialization if there's no one yet presented
+ * its initialization if there's no one yet presented
  */
 public class ExecutionCounters {
-    private final ConcurrentHashMap<MethodID, ExecutionCounter> counters = new ConcurrentHashMap<>();
+    private final Map<MethodID, ExecutionCounter> counters = new HashMap<>();
 
     /**
      * Performs mapping of given method id to associated execution counter. Mapping function is idempotent
@@ -23,9 +23,8 @@ public class ExecutionCounters {
         ExecutionCounter counter = counters.get(id);
         if (counter == null) {
             ExecutionCounter newCounter = new ExecutionCounter();
-
-            ExecutionCounter cachedCounter = counters.putIfAbsent(id, newCounter);
-            counter = Objects.requireNonNullElse(cachedCounter, newCounter);
+            counters.put(id, newCounter);
+            counter = newCounter;
         }
         return counter;
     }

@@ -2,41 +2,41 @@ package org.nsu.syspro.parprog.solution.profiling;
 
 import org.nsu.syspro.parprog.solution.jit.JitEngine;
 
-import java.util.concurrent.CountDownLatch;
-
 /**
- * Counter which represents how many times given method was executed and is this method suitable for L1/L2 compilation.
- * Provides interface for thread-safe lock-free (*) incrementing its own value.
- * <p>
- * Capable to store up to {@link JitEngine.L2_COMPILE_DECISION} values,
- * next increments will do nothing to value but provide consistency same as read of volatile integer
- * <p>
- * (*) Due to thread-safe lock-free implementation of {@link CountDownLatch.Sync.tryReleaseShared} with CAS
+ * Counter which represents how many times given method was executed and is this method suitable for L1/L2 compilation
  */
 public class ExecutionCounter {
-    private final CountDownLatch compilations;
+    private long compilations;
 
     public ExecutionCounter() {
-        compilations = new CountDownLatch(JitEngine.L2_COMPILE_DECISION);
+        compilations = 0L;
     }
 
     /**
-     * Thread-safe lock-free increments given counter by one
+     * Increments current counter value
      */
     public void count() {
-        compilations.countDown();
-    }
-
-    private int normalized() {
-        return JitEngine.L2_COMPILE_DECISION - (int)compilations.getCount();
+        if (compilations == Long.MAX_VALUE) {
+            return;
+        }
+        compilations++;
     }
 
     /**
-     * Gets current value holding by counter which is inside interval [0; JitEngine.L2_COMPILE_DECISION]
+     * Increments current counter value and return value of counter after increment
+     *
+     * @return counter value after increment
+     */
+    public int countAndRead() {
+        count();
+        return value();
+    }
+
+    /**
      * @return associated with given counter number of method execution times
      */
     public int value() {
-        return normalized();
+        return (int)compilations;
     }
 
     /**

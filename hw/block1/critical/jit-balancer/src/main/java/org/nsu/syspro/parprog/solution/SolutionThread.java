@@ -6,8 +6,11 @@ import org.nsu.syspro.parprog.solution.caching.LocalMethodCache;
 import org.nsu.syspro.parprog.solution.caching.MethodCacheEntry;
 import org.nsu.syspro.parprog.solution.profiling.ExecutionCounter;
 
+import static org.nsu.syspro.parprog.solution.caching.MethodCacheEntry.Kind.L1;
+import static org.nsu.syspro.parprog.solution.caching.MethodCacheEntry.Kind.L2;
+
 /**
- * Wrapper for UserThread, which control execution of methods according to schedule policy from task requirements
+ * Wrapper for UserThread which controls execution of methods according to schedule policy from task requirements
  */
 public class SolutionThread extends UserThread {
 
@@ -19,8 +22,38 @@ public class SolutionThread extends UserThread {
         this.globalContext = context;
     }
 
+    private void processCompileDecision(MethodID methodID, MethodCacheEntry localEntry) {
+        if (localEntry.kind() != L2) {
+            globalContext.reverseArcLock().lock();
+            try {
+                MethodCacheEntry globalEntry = globalContext.cache().lookup(methodID);
+                if (globalEntry.kind() != MethodCacheEntry.Kind.EMPTY) {
+                    localCache.put(methodID, globalEntry);
+                }
+
+                if (globalEntry.kind() != L2) {
+                    int counter = globalContext.counters().counter(methodID).countAndRead();
+
+                    if (ExecutionCounter.l2Ready(counter)) {
+                        globalContext.cache().putIfAbsent(
+                                methodID, L2, globalContext.jitEngine().l2Submitter(methodID)
+                        );
+                        localCache.put(methodID, MethodCacheEntry.forL1Entry(globalContext.cache().ensureCompiled(methodID, L2)));
+                    } else if (ExecutionCounter.l1Ready(counter)) {
+                        globalContext.cache().putIfAbsent(
+                                methodID, L1, globalContext.jitEngine().l1Submitter(methodID)
+                        );
+                        localCache.put(methodID, MethodCacheEntry.forL1Entry(globalContext.cache().ensureCompiled(methodID, L1)));
+                    }
+                }
+            } finally {
+                globalContext.reverseArcLock().unlock();
+            }
+        }
+    }
+
     /**
-     * Executes method given method id according to scheduling rules.
+     * Executes method with given method id according to scheduling rules.
      * Performs method cache lookup, updates hotness counters
      * and sends compilation schedule requests according to hotness of given method
      *
@@ -38,29 +71,7 @@ public class SolutionThread extends UserThread {
             result = globalContext.executor().execute(localEntry.method());
         }
 
-        if (localEntry.kind() != MethodCacheEntry.Kind.L2) {
-            MethodCacheEntry globalEntry = globalContext.cache().lookup(methodID);
-            if (globalEntry.kind() != MethodCacheEntry.Kind.EMPTY) {
-                localCache.put(methodID, globalEntry);
-            }
-
-            if (globalEntry.kind() != MethodCacheEntry.Kind.L2) {
-                ExecutionCounter counter = globalContext.counters().counter(methodID);
-                counter.count();
-                int counterValue = counter.value();
-
-                if (ExecutionCounter.l2Ready(counterValue)) {
-                    globalContext.cache().putIfAbsent(
-                            methodID, MethodCacheEntry.Kind.L2, globalContext.jitEngine().l2Submitter(methodID)
-                    );
-                } else if (ExecutionCounter.l1Ready(counterValue)) {
-                    globalContext.cache().putIfAbsent(
-                            methodID, MethodCacheEntry.Kind.L1, globalContext.jitEngine().l1Submitter(methodID)
-                    );
-                }
-            }
-        }
-
+        processCompileDecision(methodID, localEntry);
         return result;
     }
 }

@@ -12,6 +12,8 @@ import org.nsu.syspro.parprog.solution.profiling.ExecutionCounters;
 
 import java.time.Duration;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public abstract class TestLevels {
 
@@ -22,8 +24,8 @@ public abstract class TestLevels {
         return 3;
     }
 
-    public static UserThread createUserThread(MethodCache methodCache, ExecutionCounters counters, JitEngine jitEngine, ExecutionEngine e, CompilationEngine c, Runnable r) {
-        SessionContext context = new SessionContext(e, methodCache, counters, jitEngine);
+    public static UserThread createUserThread(MethodCache methodCache, ExecutionCounters counters, JitEngine jitEngine, ExecutionEngine e, CompilationEngine c, Lock reverseArcLock, Runnable r) {
+        SessionContext context = new SessionContext(e, methodCache, counters, jitEngine, reverseArcLock);
         return new SolutionThread(context, r);
     }
 

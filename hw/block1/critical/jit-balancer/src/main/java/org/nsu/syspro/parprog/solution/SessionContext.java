@@ -5,6 +5,8 @@ import org.nsu.syspro.parprog.solution.caching.MethodCache;
 import org.nsu.syspro.parprog.solution.jit.JitEngine;
 import org.nsu.syspro.parprog.solution.profiling.ExecutionCounters;
 
+import java.util.concurrent.locks.Lock;
+
 /**
  * Context of the current scheduling session, contains global method cache,
  * execution counters and engine for submitting methods compilation tasks using bounded number of jit threads
@@ -14,12 +16,14 @@ public class SessionContext {
     private final MethodCache cache;
     private final ExecutionCounters counters;
     private final JitEngine jitEngine;
+    private final Lock reverseArcLock;
 
-    public SessionContext(ExecutionEngine executor, MethodCache cache, ExecutionCounters counters, JitEngine jitEngine) {
+    public SessionContext(ExecutionEngine executor, MethodCache cache, ExecutionCounters counters, JitEngine jitEngine, Lock reverseArcLock) {
         this.executor = executor;
         this.cache = cache;
         this.counters = counters;
         this.jitEngine = jitEngine;
+        this.reverseArcLock = reverseArcLock;
     }
 
     /**
@@ -58,5 +62,14 @@ public class SessionContext {
      */
     public JitEngine jitEngine() {
         return jitEngine;
+    }
+
+    /**
+     * Gets lock, used for synchronizing updates of hotness counters and submitting new compilation requests
+     *
+     * @return global lock associated with given scheduling session
+     */
+    public Lock reverseArcLock() {
+        return reverseArcLock;
     }
 }

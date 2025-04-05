@@ -3,12 +3,13 @@ package org.nsu.syspro.parprog.solution.caching;
 import org.nsu.syspro.parprog.external.MethodID;
 
 import java.util.HashMap;
+import java.util.Map;
 
 /**
- * Thread-unsafe method cache with O(1) method lookup and put time.
+ * Method cache with O(1) method lookup and put time.
  */
 public class LocalMethodCache {
-    private final HashMap<MethodID, MethodCacheEntry> cache = new HashMap<>();
+    private final Map<MethodID, MethodCacheEntry> cache = new HashMap<>();
 
     /**
      * Performs lookup of compiled L1 or L2 methods associated with given {@code id}
