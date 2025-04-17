@@ -16,14 +16,12 @@ public class SessionContext {
     private final MethodCache cache;
     private final ExecutionCounters counters;
     private final JitEngine jitEngine;
-    private final Lock reverseArcLock;
 
-    public SessionContext(ExecutionEngine executor, MethodCache cache, ExecutionCounters counters, JitEngine jitEngine, Lock reverseArcLock) {
+    public SessionContext(ExecutionEngine executor, MethodCache cache, ExecutionCounters counters, JitEngine jitEngine) {
         this.executor = executor;
         this.cache = cache;
         this.counters = counters;
         this.jitEngine = jitEngine;
-        this.reverseArcLock = reverseArcLock;
     }
 
     /**
@@ -36,7 +34,7 @@ public class SessionContext {
     }
 
     /**
-     * Gets thread-safe lock-free global method cache used for store
+     * Gets global method cache used for store
      * compilation results and broadcasting to executor threads
      *
      * @return global method associated with given scheduling session
@@ -62,14 +60,5 @@ public class SessionContext {
      */
     public JitEngine jitEngine() {
         return jitEngine;
-    }
-
-    /**
-     * Gets lock, used for synchronizing updates of hotness counters and submitting new compilation requests
-     *
-     * @return global lock associated with given scheduling session
-     */
-    public Lock reverseArcLock() {
-        return reverseArcLock;
     }
 }

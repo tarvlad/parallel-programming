@@ -47,7 +47,6 @@ public class TestEnvironment {
     private final MethodCache methodCache;
     private final ExecutionCounters execCounters;
     private final JitEngine jitEngine;
-    private final Lock reverseArcLock = new ReentrantLock(true);
 
     private final long idOnStart = UserThread.firstUnusedThreadNum();
 
@@ -388,7 +387,7 @@ public class TestEnvironment {
         private final Set<UserThread> running = new HashSet<>();
 
         public UserThread execute(Runnable command) {
-            final UserThread thread = EasyFastTest.createUserThread(methodCache, execCounters, jitEngine, engine, compiler, reverseArcLock, () -> {
+            final UserThread thread = EasyFastTest.createUserThread(methodCache, execCounters, jitEngine, engine, compiler, () -> {
                 command.run();
 
                 synchronized (running) {

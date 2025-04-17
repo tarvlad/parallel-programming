@@ -6,12 +6,15 @@ import org.nsu.syspro.parprog.external.MethodID;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 /**
  * Method cache with mapping of given method id to associated L1 or L2 in-progress or finished compilation
  */
 public class MethodCache {
+    private final Lock cacheSyncLock = new ReentrantLock(true);
     private final Map<MethodID, Future<CompiledMethod>> l1Cache = new HashMap<>();
     private final Map<MethodID, Future<CompiledMethod>> l2Cache = new HashMap<>();
 
@@ -89,6 +92,15 @@ public class MethodCache {
             return MethodCacheEntry.forEmpty();
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    public void cacheLockedAction(Runnable action) {
+        cacheSyncLock.lock();
+        try {
+            action.run();
+        } finally {
+            cacheSyncLock.unlock();
         }
     }
 }

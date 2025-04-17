@@ -22,6 +22,10 @@ public class ExecutionCounter {
         compilations++;
     }
 
+    public void setValue(long value) {
+        compilations = value;
+    }
+
     /**
      * Increments current counter value and return value of counter after increment
      *
