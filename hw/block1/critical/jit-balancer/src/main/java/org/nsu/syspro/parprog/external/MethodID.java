@@ -10,6 +10,15 @@ package org.nsu.syspro.parprog.external;
  *     <li> Faster identity checks: different {@link MethodID}s have different ids.
  * </ul>
  */
-public interface MethodID {
-    long id();
+public abstract class MethodID {
+    public abstract long id();
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof MethodID)) {
+            return false;
+        }
+        var m = (MethodID)o;
+        return id() == m.id();
+    }
 }

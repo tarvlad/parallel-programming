@@ -1,10 +1,5 @@
 package org.nsu.syspro.parprog;
 
-import org.nsu.syspro.parprog.examples.AdaptiveCompiler;
-import org.nsu.syspro.parprog.examples.CachingTopTierJIT;
-import org.nsu.syspro.parprog.examples.Interpreter;
-import org.nsu.syspro.parprog.external.CompilationEngine;
-import org.nsu.syspro.parprog.external.ExecutionEngine;
 import org.nsu.syspro.parprog.external.ExecutionResult;
 import org.nsu.syspro.parprog.external.MethodID;
 import org.nsu.syspro.parprog.solution.SolutionThread;
@@ -28,15 +23,8 @@ public abstract class UserThread extends Thread {
     private static final ThreadLocal<UserThread> currentUserThread = new ThreadLocal<>();
 
     public final long id;
-    public final ExecutionEngine exec;
-    public final CompilationEngine compiler;
-    public final int compilationThreadBound; // should be used for `Thread-bound-compilation` constraint
-
-    public UserThread(int compilationThreadBound, ExecutionEngine exec, CompilationEngine compiler, Runnable r) {
+    public UserThread(Runnable r) {
         super(r);
-        this.compilationThreadBound = compilationThreadBound;
-        this.exec = exec;
-        this.compiler = compiler;
         this.id = idProvider.getAndAdd(1);
     }
 
